@@ -10,7 +10,7 @@ public class GeminiAPIClient : MonoBehaviour
 {
     private readonly string URL = "https://generativelanguage.googleapis.com/v1beta/models/";
     private readonly string MODEL = "gemini-1.5-flash-latest";
-    private readonly string KEY = "AIzaSyAwwxcfQqAaL3Sm3JFbTms5wNup8z5IBbQ";
+    private readonly string KEY = "AIzaSyDfEGqpOZ94pkOMSlCZlInYeYxyWtiLxaQ";
 
     public async Task<string> SendRequest(GenerateContentRequest requestBody)
     {

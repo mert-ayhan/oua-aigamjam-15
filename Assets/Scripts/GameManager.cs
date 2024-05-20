@@ -5,12 +5,15 @@ using System.Text.RegularExpressions;
 using GeminiAPI.Types;
 using TMPro;
 using UnityEngine;
+using Cinemachine;
 
-public class AITest : MonoBehaviour
+public class GameManager : MonoBehaviour
 {
     [SerializeField] private TextMeshProUGUI _chatText;
     [SerializeField] private TextMeshProUGUI _responseText;
     [SerializeField] private GameObject _chatPanel;
+    [SerializeField] private GameObject _npc;
+    [SerializeField] private CinemachineVirtualCamera _cinemachineVirtualCamera;
 
     private static readonly string Context =
         "Bir post-apokaliptik evrende geçen bir oyun tasarlıyorum. " +
@@ -36,16 +39,35 @@ public class AITest : MonoBehaviour
     private GeminiAPIClient _geminiAPIClient;
     private CharacterController _characterController;
     private Coroutine _typingCoroutine;
+    private NPCSplineMover npcSplineMover;
     private bool waitingForResponse = true;
 
     void Start()
     {
+        Debug.Log("GameManager Start method begins");
+
         _geminiAPIClient = GetComponent<GeminiAPIClient>();
         _characterController = GetComponent<CharacterController>();
-        _chatText.text = "...";
+        npcSplineMover = _npc.GetComponent<NPCSplineMover>();
 
+        if (_geminiAPIClient == null) Debug.LogError("GeminiAPIClient is null");
+        if (_characterController == null) Debug.LogError("CharacterController is null");
+        if (npcSplineMover == null) Debug.LogError("NPCSplineMover is null");
+        if (_chatText == null) Debug.LogError("ChatText is null");
+        if (_responseText == null) Debug.LogError("ResponseText is null");
+        if (_chatPanel == null) Debug.LogError("ChatPanel is null");
+
+        _chatText.text = "...";
         currentRequest = initialRequest;
-        SendMessageToAI("Merhaba, hoş geldiniz nasıl yardımcı olabilirim");
+        SendMessageToAI("Merhaba, hoş geldiniz nasıl yardımcı olabilirim?");
+
+        npcSplineMover.Move(false, () =>
+        {
+            Debug.Log("NPC movement complete");
+            _chatPanel.SetActive(true);
+            _cinemachineVirtualCamera.LookAt = _npc.transform;
+            _cinemachineVirtualCamera.Priority = 1;
+        });
     }
 
     public async void SendMessageToAI(string message)
@@ -71,34 +93,44 @@ public class AITest : MonoBehaviour
             StopCoroutine(_typingCoroutine);
         }
 
-        string pattern = @"ouagamejam:(al|sat):(\d+)";
-        Match match = Regex.Match(response, pattern);
-        if (match.Success)
+        if (response.Contains("ouagamejam"))
         {
-            Debug.Log(response);
+            string pattern = @"ouagamejam:(al|sat):(\d+)";
+            Match match = Regex.Match(response, pattern);
+            if (match.Success)
+            {
+                Debug.Log(response);
 
-            string tip = match.Groups[1].Value;
-            int saat = int.Parse(match.Groups[2].Value);
-            if (tip == "sat")
-                _characterController.IncreaseTime(saat);
-            else if (tip == "al")
-                _characterController.DecreaseTime(saat);
+                string tip = match.Groups[1].Value;
+                int saat = int.Parse(match.Groups[2].Value);
+                if (tip == "sat")
+                    _characterController.IncreaseTime(saat);
+                else if (tip == "al")
+                    _characterController.DecreaseTime(saat);
 
+                response = Regex.Replace(response, pattern, "").Trim();
+                StartCoroutine(CloseWindowAfterDelay(1f));
+            }
+            else
+            {
+                response = response.Replace("ouagamejam", "");
+                StartCoroutine(CloseWindowAfterDelay(1f));
+            }
 
-            response = Regex.Replace(response, pattern, "").Trim();
-            StartCoroutine(CloseWindowAfterDelay(5f));
+            waitingForResponse = false;
         }
         else
         {
             waitingForResponse = true;
         }
 
-        if (response.Length < 1)
+        if (response.Trim().Length < 3)
         {
             response = "Kolay gelsin.";
         }
 
         _chatText.text = response;
+        Debug.Log("chat text: " + response);
         currentRequest.contents = currentRequest.contents.Append(new Content(Role.Model, response)).ToArray();
     }
 
@@ -123,8 +155,28 @@ public class AITest : MonoBehaviour
     private IEnumerator CloseWindowAfterDelay(float delay)
     {
         yield return new WaitForSeconds(delay);
-        waitingForResponse = false;
         Debug.Log("closing");
-        //_chatPanel.SetActive(false);
+        _chatPanel.SetActive(false);
+        _cinemachineVirtualCamera.Priority = 10;
+        npcSplineMover.Move(true, () => { StartCoroutine(ExitAndEnterAgain(5f)); });
+    }
+
+    private IEnumerator ExitAndEnterAgain(float delay)
+    {
+        _npc.SetActive(false);
+        yield return new WaitForSeconds(delay);
+        currentRequest = initialRequest;
+        waitingForResponse = true;
+        SendMessageToAI("Merhaba, hoş geldiniz nasıl yardımcı olabilirim?");
+        _responseText.text = "...";
+        _responseText.ForceMeshUpdate();
+        _npc.transform.rotation = Quaternion.Euler(3.84257054f, 75.7687149f, 0.948965549f);
+        _npc.SetActive(true);
+        npcSplineMover.Move(false, () =>
+        {
+            _chatPanel.SetActive(true);
+            _cinemachineVirtualCamera.LookAt = _npc.transform;
+            _cinemachineVirtualCamera.Priority = 1;
+        });
     }
 }
